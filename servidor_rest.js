@@ -1,13 +1,7 @@
+const conexion = require("./conexion_mysql");
 const express = require("express");
 const jwt = require("jsonwebtoken");
-const { createClient } = require("@supabase/supabase-js");
-
 const JWT_SECRET = process.env.JWT_SECRET || "secreto_super_seguro_telemedicina_2026";
-
-// Configuración de Supabase (Sustituye por tus credenciales de Supabase)
-const supabaseUrl = process.env.SUPABASE_URL || "https://mlfmpelowsjnizwfsdev.supabase.co";
-const supabaseKey = process.env.SUPABASE_KEY || "sb_publishable_9Ne_EEEOyZaG61qDxz4N6A_ay41m3uJ";
-const supabase = createClient(supabaseUrl, supabaseKey);
 
 function verificarJWT(req, res, next) {
     const authHeader = req.headers["authorization"];
@@ -33,390 +27,360 @@ function verificarJWT(req, res, next) {
 function createRESTServer(data, siguientesIds, wsServer) {
     const app = express();
 
-    app.use("/appCliente", express.static("cliente_rest"));
     app.use(express.json());
 
-    // --- UBICACIONES ---
-    app.get("/api/ubicaciones", verificarJWT, async function (req, res) {
-        const { data: ubicaciones, error } = await supabase
-            .from("ubicaciones")
-            .select("*");
-
-        if (error) {
-            console.log("Error al obtener ubicaciones:", error);
-            return res.status(500).json("Error al realizar la consulta");
-        }
-        res.status(200).json(ubicaciones);
+    app.get("/api/ubicaciones", verificarJWT, function (req, res) {
+        var sql = "SELECT * FROM ubicaciones";
+        conexion.query(sql, function (err, filas) {
+            if (err) {
+                console.log("Error al obtener ubicaciones:", err);
+                res.status(500).json("Error al realizar la consulta");
+            } else {
+                res.status(200).json(filas);
+            }
+        });
     });
 
-    // --- CATEGORIAS ---
-    app.get("/api/categorias", verificarJWT, async function (req, res) {
-        const { data: categorias, error } = await supabase
-            .from("categorias")
-            .select("*");
-
-        if (error) {
-            console.log("Error al obtener categorias:", error);
-            return res.status(500).json("Error al realizar la consulta");
-        }
-        res.status(200).json(categorias);
+    app.get("/api/categorias", verificarJWT,  function (req, res) {
+        var sql = "SELECT * FROM categorias";
+        conexion.query(sql, function (err, filas) {
+            if (err) {
+                console.log("Error al obtener categorias:", err);
+                res.status(500).json("Error al realizar la consulta");
+            } else {
+                res.status(200).json(filas);
+            }
+        });
     });
 
-    // --- MODELOS ---
-    app.get("/api/models", verificarJWT, async function (req, res) {
-        const { data: modelos, error } = await supabase
-            .from("modelos")
-            .select("*");
-
-        if (error) {
-            console.log("Error al obtener modelos:", error);
-            return res.status(500).json("Error al realizar la consulta");
-        }
-        res.status(200).json(modelos);
+    app.get("/api/models", verificarJWT, function (req, res) {
+        var sql = "SELECT * FROM modelos";
+        conexion.query(sql, function (err, filas) {
+            if (err) {
+                console.log("Error al obtener modelos:", err);
+                res.status(500).json("Error al realizar la consulta");
+            } else {
+                res.status(200).json(filas);
+            }
+        });
     });
-
-    // --- RUTA DE LOGIN ---
-    app.post("/api/gestores/login", async function (req, res) {
-        const { login, password } = req.body;
-
-        const { data: gestores, error } = await supabase
-            .from("gestores")
-            .select("*")
-            .eq("usuario", login)
-            .eq("password", password);
-
-        if (error) {
-            console.log("Error en login gestor:", error);
-            return res.status(500).json("Error en el servidor");
+    app.post("/api/gestores/login", function (req, res) {
+    var login = req.body.login;
+    var password = req.body.password;
+    
+    var sql = "SELECT * FROM gestores WHERE usuario = ? AND password = ?";
+    conexion.query(sql, [login, password], function (err, gestores) {
+        if (err) {
+            console.log("Error en login gestor:", err);
+            return res.status(500).json({ error: "Error en el servidor" });
         }
-
+        
         if (gestores.length === 1) {
-            const token = jwt.sign(
+            var token = jwt.sign(
                 { id: gestores[0].id, usuario: gestores[0].usuario },
                 JWT_SECRET,
                 { expiresIn: "8h" }
             );
-            return res.json({ id: gestores[0].id, token: token });
+            return res.status(200).json({ id: gestores[0].id, token: token });
         } else {
-            return res.status(403).send("Credenciales incorrectas");
+            return res.status(403).json({ error: "Credenciales incorrectas" });
         }
     });
+});
 
-    // --- REGISTRAR GESTOR ---
-    app.post("/api/gestores", async function (req, res) {
-        const datos = req.body;
+    app.post("/api/gestores", function (req, res) {
+        var datos = req.body;
 
-        const { data: existente, error: errCheck } = await supabase
-            .from("gestores")
-            .select("*")
-            .eq("usuario", datos.usuario);
+        var checkSql = "SELECT * FROM gestores WHERE usuario = ?";
+        conexion.query(checkSql, [datos.usuario], function (err, resultado) {
+            if (err) {
+                console.log("Error al comprobar usuario:", err);
+                return res.status(500).json("Error al realizar la consulta");
+            }
 
-        if (errCheck) {
-            console.log("Error al comprobar usuario:", errCheck);
-            return res.status(500).json("Error al realizar la consulta");
-        }
-
-        if (existente.length > 0) {
-            console.log("REGISTRO - Usuario ya existe");
-            return res.status(400).json({ error: "El usuario ya existe" });
-        }
-
-        const { data: nuevo, error: errInsert } = await supabase
-            .from("gestores")
-            .insert([{
-                nombre: datos.nombre,
-                apellidos: datos.apellidos,
-                usuario: datos.usuario,
-                password: datos.password
-            }])
-            .select()
-            .single();
-
-        if (errInsert) {
-            console.log("Error al registrar gestor:", errInsert);
-            return res.status(500).json("Error al registrar el gestor");
-        }
-
-        console.log("REGISTRO - Gestor creado:", nuevo);
-        res.status(201).json(nuevo);
-    });
-
-    // --- ACTUALIZAR GESTOR ---
-    app.put("/api/gestores/:id", verificarJWT, async function (req, res) {
-        const id = req.params.id;
-        const datos = req.body;
-
-        const { data: gestorActual, error: errBuscar } = await supabase
-            .from("gestores")
-            .select("*")
-            .eq("id", id)
-            .maybeSingle();
-
-        if (errBuscar) {
-            return res.status(500).json("Error al consultar el gestor");
-        }
-        if (!gestorActual) {
-            return res.status(404).send("Gestor no encontrado");
-        }
-
-        if (datos.usuario && datos.usuario !== gestorActual.usuario) {
-            const { data: existente } = await supabase
-                .from("gestores")
-                .select("id")
-                .eq("usuario", datos.usuario);
-
-            if (existente && existente.length > 0) {
+            if (resultado.length > 0) {
+                console.log("REGISTRO - Usuario ya existe");
                 return res.status(400).json({ error: "El usuario ya existe" });
             }
-        }
 
-        const camposActualizados = {
-            nombre: datos.nombre !== undefined ? datos.nombre : gestorActual.nombre,
-            apellidos: datos.apellidos !== undefined ? datos.apellidos : gestorActual.apellidos,
-            usuario: datos.usuario !== undefined ? datos.usuario : gestorActual.usuario,
-            password: datos.password !== undefined ? datos.password : gestorActual.password
-        };
+            var insertSql = "INSERT INTO gestores (nombre, apellidos, usuario, password) VALUES (?, ?, ?, ?)";
+            conexion.query(insertSql, [datos.nombre, datos.apellidos, datos.usuario, datos.password], function (err, insertRes) {
+                if (err) {
+                    console.log("Error al registrar gestor:", err);
+                    return res.status(500).json("Error al registrar el gestor");
+                }
 
-        const { data: actualizado, error: errUpdate } = await supabase
-            .from("gestores")
-            .update(camposActualizados)
-            .eq("id", id)
-            .select()
-            .single();
+                var nuevoGestor = {
+                    id: insertRes.insertId,
+                    nombre: datos.nombre,
+                    apellidos: datos.apellidos,
+                    usuario: datos.usuario,
+                    password: datos.password
+                };
 
-        if (errUpdate) {
-            return res.status(500).json("Error al actualizar el gestor");
-        }
-
-        res.json(actualizado);
+                console.log("REGISTRO - Gestor creado:", nuevoGestor);
+                res.status(201).json(nuevoGestor);
+            });
+        });
     });
 
-    // --- OBTENER GESTOR ---
-    app.get("/api/gestores/:id", verificarJWT, async function (req, res) {
-        const id = req.params.id;
-        const { data: gestor, error } = await supabase
-            .from("gestores")
-            .select("id, nombre, apellidos, usuario")
-            .eq("id", id)
-            .maybeSingle();
+    app.put("/api/gestores/:id", verificarJWT, function (req, res) {
+        var id = req.params.id;
+        var datos = req.body;
 
-        if (error) {
-            return res.status(500).json("Error al consultar el gestor");
-        }
-        if (!gestor) {
-            return res.status(404).send("Gestor no encontrado");
-        }
-        res.json(gestor);
+        var sqlBuscar = "SELECT * FROM gestores WHERE id = ?";
+        conexion.query(sqlBuscar, [id], function (err, gestores) {
+            if (err) {
+                return res.status(500).json("Error al consultar el gestor");
+            }
+            if (gestores.length === 0) {
+                return res.status(404).send("Gestor no encontrado");
+            }
+
+            var gestorActual = gestores[0];
+
+            var verificarYActualizar = function() {
+                var nombre = datos.nombre !== undefined ? datos.nombre : gestorActual.nombre;
+                var apellidos = datos.apellidos !== undefined ? datos.apellidos : gestorActual.apellidos;
+                var usuario = datos.usuario !== undefined ? datos.usuario : gestorActual.usuario;
+                var password = datos.password !== undefined ? datos.password : gestorActual.password;
+
+                var updateSql = "UPDATE gestores SET nombre = ?, apellidos = ?, usuario = ?, password = ? WHERE id = ?";
+                conexion.query(updateSql, [nombre, apellidos, usuario, password, id], function (err) {
+                    if (err) {
+                        return res.status(500).json("Error al actualizar el gestor");
+                    }
+                    res.json({
+                        id: parseInt(id),
+                        nombre: nombre,
+                        apellidos: apellidos,
+                        usuario: usuario,
+                        password: password
+                    });
+                });
+            };
+
+            if (datos.usuario && datos.usuario !== gestorActual.usuario) {
+                conexion.query("SELECT * FROM gestores WHERE usuario = ?", [datos.usuario], function (err, existe) {
+                    if (err) return res.status(500).json("Error al validar usuario");
+                    if (existe.length > 0) {
+                        return res.status(400).json({ error: "El usuario ya existe" });
+                    }
+                    verificarYActualizar();
+                });
+            } else {
+                verificarYActualizar();
+            }
+        });
     });
 
-    // --- OBTENER SANITARIO ---
-    app.get("/api/sanitarios/:id", verificarJWT, async function (req, res) {
-        const id = req.params.id;
-        const { data: sanitario, error } = await supabase
-            .from("sanitarios")
-            .select("id, nombre, apellidos, usuario")
-            .eq("id", id)
-            .maybeSingle();
-
-        if (error) {
-            return res.status(500).json("Error al consultar el sanitario");
-        }
-        if (!sanitario) {
-            return res.status(404).send("Sanitario no encontrado");
-        }
-        res.json(sanitario);
+    app.get("/api/gestores/:id", verificarJWT, function (req, res) {
+        var id = req.params.id;
+        var sql = "SELECT id, nombre, apellidos, usuario FROM gestores WHERE id = ?";
+        conexion.query(sql, [id], function (err, gestores) {
+            if (err) {
+                res.status(500).json("Error al consultar el gestor");
+            } else if (gestores.length === 1) {
+                res.json(gestores[0]);
+            } else {
+                res.status(404).send("Gestor no encontrado");
+            }
+        });
     });
 
-    // --- RECURSOS (FILTRADO) ---
-    app.get("/api/recursos", verificarJWT, async function (req, res) {
-        const { categoria, modelo, ubicacion, estado } = req.query;
+    app.get("/api/sanitarios/:id", verificarJWT, function (req, res) {
+        var id = req.params.id;
+        var sql = "SELECT id, nombre, apellidos, usuario FROM sanitarios WHERE id = ?";
+        conexion.query(sql, [id], function (err, sanitarios) {
+            if (err) {
+                res.status(500).json("Error al consultar el sanitario");
+            } else if (sanitarios.length === 1) {
+                res.json(sanitarios[0]);
+            } else {
+                res.status(404).send("Sanitario no encontrado");
+            }
+        });
+    });
 
-        let consulta = supabase.from("recursos").select("*, modelos!inner(categoria)");
+    app.get("/api/recursos", verificarJWT, function (req, res) {
+        var categoria = req.query.categoria;
+        var modelo = req.query.modelo;
+        var ubicacion = req.query.ubicacion;
+        var estado = req.query.estado;
+
+        var sql = "SELECT r.* FROM recursos r";
+        var condiciones = [];
+        var params = [];
 
         if (categoria && categoria !== "Todos" && categoria !== "") {
-            consulta = consulta.eq("modelos.categoria", categoria);
+            sql += " INNER JOIN modelos m ON r.modelo = m.id";
+            condiciones.push("m.categoria = ?");
+            params.push(categoria);
         }
+
         if (modelo && modelo !== "Todos" && modelo !== "") {
-            consulta = consulta.eq("modelo", modelo);
+            condiciones.push("r.modelo = ?");
+            params.push(modelo);
         }
+
         if (ubicacion && ubicacion !== "Todos" && ubicacion !== "") {
-            consulta = consulta.eq("ubicacion", ubicacion);
+            condiciones.push("r.ubicacion = ?");
+            params.push(ubicacion);
         }
+
         if (estado && estado !== "Todos" && estado !== "") {
-            consulta = consulta.eq("estado", estado);
+            condiciones.push("r.estado = ?");
+            params.push(estado);
         }
 
-        const { data: recursos, error } = await consulta;
-
-        if (error) {
-            console.log("Error al obtener recursos:", error);
-            return res.status(500).json("Error al consultar los recursos");
+        if (condiciones.length > 0) {
+            sql += " WHERE " + condiciones.join(" AND ");
         }
 
-        // Limpiar el join anidado para mantener el formato original de la respuesta
-        const resultadoLimpio = recursos.map(({ modelos, ...resto }) => resto);
-        res.json(resultadoLimpio);
+        conexion.query(sql, params, function (err, recursos) {
+            if (err) {
+                console.log("Error al obtener recursos:", err);
+                res.status(500).json("Error al consultar los recursos");
+            } else {
+                res.json(recursos);
+            }
+        });
     });
 
-    // --- RECURSO POR ID ---
-    app.get("/api/recursos/:id", verificarJWT, async function (req, res) {
-        const id = req.params.id;
-        const { data: recurso, error } = await supabase
-            .from("recursos")
-            .select("*")
-            .eq("id", id)
-            .maybeSingle();
-
-        if (error) {
-            return res.status(500).json("Error al consultar el recurso");
-        }
-        if (!recurso) {
-            return res.status(404).send("Recurso no encontrado");
-        }
-        res.json(recurso);
+    app.get("/api/recursos/:id", verificarJWT, function (req, res) {
+        var id = req.params.id;
+        var sql = "SELECT * FROM recursos WHERE id = ?";
+        conexion.query(sql, [id], function (err, recursos) {
+            if (err) {
+                res.status(500).json("Error al consultar el recurso");
+            } else if (recursos.length === 1) {
+                res.json(recursos[0]);
+            } else {
+                res.status(404).send("Recurso no encontrado");
+            }
+        });
     });
 
-    // --- CREAR RECURSO ---
-    app.post("/api/recursos", verificarJWT, async function (req, res) {
-        const datos = req.body;
+    app.post("/api/recursos", verificarJWT, function (req, res) {
+        var datos = req.body;
+        var sql = "INSERT INTO recursos (modelo, ubicacion, numero_serie, estado) VALUES (?, ?, ?, ?)";
+        var params = [parseInt(datos.modelo), parseInt(datos.ubicacion), datos.numero_serie, parseInt(datos.estado)];
 
-        const { data: nuevoRecurso, error } = await supabase
-            .from("recursos")
-            .insert([{
+        conexion.query(sql, params, function (err, resultado) {
+            if (err) {
+                console.log("Error al insertar recurso:", err);
+                return res.status(500).json("Error al insertar el recurso");
+            }
+
+            var nuevoRecurso = {
+                id: resultado.insertId,
                 modelo: parseInt(datos.modelo),
                 ubicacion: parseInt(datos.ubicacion),
                 numero_serie: datos.numero_serie,
                 estado: parseInt(datos.estado)
-            }])
-            .select()
-            .single();
+            };
 
-        if (error) {
-            console.log("Error al insertar recurso:", error);
-            return res.status(500).json("Error al insertar el recurso");
-        }
+            var sqlInfo = "SELECT m.nombre AS modeloNombre, c.nombre AS categoriaNombre FROM modelos m INNER JOIN categorias c ON m.categoria = c.id WHERE m.id = ?";
+            conexion.query(sqlInfo, [nuevoRecurso.modelo], function (errInfo, filasInfo) {
+                if (!errInfo && filasInfo.length > 0 && wsServer && wsServer.broadcastAvisoNuevoRecurso) {
+                    wsServer.broadcastAvisoNuevoRecurso(
+                        filasInfo[0].categoriaNombre,
+                        filasInfo[0].modeloNombre,
+                        nuevoRecurso.numero_serie,
+                        datos.gestorNombre || "Gestor"
+                    );
+                }
+            });
 
-        // Obtener datos del modelo y categoría para el WebSocket
-        const { data: modeloData } = await supabase
-            .from("modelos")
-            .select("nombre, categorias(nombre)")
-            .eq("id", nuevoRecurso.modelo)
-            .maybeSingle();
-
-        if (modeloData && wsServer && wsServer.broadcastAvisoNuevoRecurso) {
-            wsServer.broadcastAvisoNuevoRecurso(
-                modeloData.categorias ? modeloData.categorias.nombre : "",
-                modeloData.nombre,
-                nuevoRecurso.numero_serie,
-                datos.gestorNombre || "Gestor"
-            );
-        }
-
-        res.status(201).json(nuevoRecurso);
+            res.status(201).json(nuevoRecurso);
+        });
     });
 
-    // --- ACTUALIZAR RECURSO ---
-    app.put("/api/recursos/:id", verificarJWT, async function (req, res) {
-        const id = req.params.id;
-        const datos = req.body;
+    app.put("/api/recursos/:id", verificarJWT, function (req, res) {
+        var id = req.params.id;
+        var datos = req.body;
 
-        const { data: actual, error: errBuscar } = await supabase
-            .from("recursos")
-            .select("*")
-            .eq("id", id)
-            .maybeSingle();
+        var sqlBuscar = "SELECT * FROM recursos WHERE id = ?";
+        conexion.query(sqlBuscar, [id], function (err, recursos) {
+            if (err) {
+                return res.status(500).json("Error al consultar el recurso");
+            }
+            if (recursos.length === 0) {
+                return res.status(404).send("Recurso no encontrado");
+            }
 
-        if (errBuscar) {
-            return res.status(500).json("Error al consultar el recurso");
-        }
-        if (!actual) {
-            return res.status(404).send("Recurso no encontrado");
-        }
+            var actual = recursos[0];
+            var modelo = datos.modelo !== undefined ? parseInt(datos.modelo) : actual.modelo;
+            var ubicacion = datos.ubicacion !== undefined ? parseInt(datos.ubicacion) : actual.ubicacion;
+            var numero_serie = datos.numero_serie !== undefined ? datos.numero_serie : actual.numero_serie;
+            var estado = datos.estado !== undefined ? parseInt(datos.estado) : actual.estado;
 
-        const updateData = {
-            modelo: datos.modelo !== undefined ? parseInt(datos.modelo) : actual.modelo,
-            ubicacion: datos.ubicacion !== undefined ? parseInt(datos.ubicacion) : actual.ubicacion,
-            numero_serie: datos.numero_serie !== undefined ? datos.numero_serie : actual.numero_serie,
-            estado: datos.estado !== undefined ? parseInt(datos.estado) : actual.estado
-        };
-
-        const { data: actualizado, error: errUpdate } = await supabase
-            .from("recursos")
-            .update(updateData)
-            .eq("id", id)
-            .select()
-            .single();
-
-        if (errUpdate) {
-            return res.status(500).json("Error al actualizar el recurso");
-        }
-
-        res.json(actualizado);
+            var sqlUpdate = "UPDATE recursos SET modelo = ?, ubicacion = ?, numero_serie = ?, estado = ? WHERE id = ?";
+            conexion.query(sqlUpdate, [modelo, ubicacion, numero_serie, estado, id], function (errUpdate) {
+                if (errUpdate) {
+                    return res.status(500).json("Error al actualizar el recurso");
+                }
+                res.json({
+                    id: parseInt(id),
+                    modelo: modelo,
+                    ubicacion: ubicacion,
+                    numero_serie: numero_serie,
+                    estado: estado
+                });
+            });
+        });
     });
 
-    // --- BORRAR RECURSO ---
-    app.delete("/api/recursos/:id", verificarJWT, async function (req, res) {
-        const id = req.params.id;
-
-        const { data, error } = await supabase
-            .from("recursos")
-            .delete()
-            .eq("id", id)
-            .select();
-
-        if (error) {
-            console.log("Error al borrar el recurso:", error);
-            return res.status(500).json("Error al realizar el borrado");
-        }
-
-        if (data && data.length > 0) {
-            res.status(200).json("Recurso eliminado");
-        } else {
-            res.status(404).json("No se ha encontrado el recurso a borrar");
-        }
+    app.delete("/api/recursos/:id", verificarJWT, function (req, res) {
+        var id = req.params.id;
+        var sql = "DELETE FROM recursos WHERE id = ?";
+        conexion.query(sql, [id], function (err, resultado) {
+            if (err) {
+                console.log("Error al borrar el recurso:", err);
+                res.status(500).json("Error al realizar el borrado");
+            } else if (resultado.affectedRows > 0) {
+                res.status(200).json("Recurso eliminado");
+            } else {
+                res.status(404).json("No se ha encontrado el recurso a borrar");
+            }
+        });
     });
 
-    // --- RESERVAS DEL RECURSO ---
-    app.get("/api/recursos/:id/reservas", verificarJWT, async function (req, res) {
-        const id = req.params.id;
-        const { data: reservas, error } = await supabase
-            .from("reservas")
-            .select("*")
-            .eq("recurso", id);
-
-        if (error) {
-            return res.status(500).json("Error al consultar reservas");
-        }
-        res.json(reservas);
+    app.get("/api/recursos/:id/reservas", verificarJWT, function (req, res) {
+        var id = req.params.id;
+        var sql = "SELECT * FROM reservas WHERE recurso = ?";
+        conexion.query(sql, [id], function (err, reservas) {
+            if (err) {
+                res.status(500).json("Error al consultar reservas");
+            } else {
+                res.json(reservas);
+            }
+        });
     });
 
-    // --- RESEÑAS DEL RECURSO ---
-    app.get("/api/recursos/:id/resenvas", verificarJWT, async function (req, res) {
-        const id = req.params.id;
-        const { data: resenvas, error } = await supabase
-            .from("resenvas")
-            .select("*")
-            .eq("recurso", id);
-
-        if (error) {
-            return res.status(500).json("Error al consultar resenvas");
-        }
-        res.json(resenvas);
+    app.get("/api/recursos/:id/resenvas", verificarJWT, function (req, res) {
+        var id = req.params.id;
+        var sql = "SELECT * FROM resenvas WHERE recurso = ?";
+        conexion.query(sql, [id], function (err, resenvas) {
+            if (err) {
+                res.status(500).json("Error al consultar resenvas");
+            } else {
+                res.json(resenvas);
+            }
+        });
     });
 
-    // --- CONTADOR DE RESERVAS SIN ACTIVAR ---
-    app.get("/api/reservas/sin-activar/count", verificarJWT, async function (req, res) {
-        const { count, error } = await supabase
-            .from("reservas")
-            .select("*", { count: "exact", head: true })
-            .is("fecha_inicio", null);
-
-        if (error) {
-            return res.status(500).json("Error al contar reservas");
-        }
-        res.status(200).json({ count: count || 0 });
+    app.get("/api/reservas/sin-activar/count", verificarJWT, function (req, res) {
+        var sql = "SELECT COUNT(*) AS total FROM reservas WHERE fecha_inicio IS NULL";
+        conexion.query(sql, function (err, resultado) {
+            if (err) {
+                res.status(500).json("Error al contar reservas");
+            } else {
+                res.status(200).json({ count: resultado[0].total });
+            }
+        });
     });
-
+   
     return app;
 }
 
