@@ -1,5 +1,5 @@
 const rpc = require('./lib_rpc_servidor.js');
-const conexionBD = require('./conexion_mysql.js');
+
 
 function createRPCServer(wsServer) {
     const rpcServer = rpc.server(3501, () => {
