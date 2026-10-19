@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>App Sanitario - Gestión de Recursos Hospitalarios</title>
+    <link rel="stylesheet" href="sanitario.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Login View -->
+        <div id="loginView">
+            <h2>Login Sanitario</h2>
+            <div class="form-group">
+                <label>Usuario:</label>
+                <input type="text" id="loginUsuario" placeholder="Ingrese su usuario">
+            </div>
+            <div class="form-group">
+                <label>Contraseña:</label>
+                <input type="password" id="loginPassword" placeholder="Ingrese su contraseña">
+            </div>
+            <button class="btn btn-primary" onclick="login()">Ingresar</button>
+            <button class="btn btn-secondary" onclick="mostrarRegistro()">Registrarse</button>
+            <div id="loginError" class="error"></div>
+        </div>
+
+        <!-- Registro View -->
+        <div id="registroView" class="hidden">
+            <h2 id="registroTitulo">Registro de Sanitario</h2>
+            <input type="hidden" id="sanitarioId">
+            <div class="form-group">
+                <label>Nombre:</label>
+                <input type="text" id="regNombre" placeholder="Ingrese su nombre">
+            </div>
+            <div class="form-group">
+                <label>Apellidos:</label>
+                <input type="text" id="regApellidos" placeholder="Ingrese sus apellidos">
+            </div>
+            <div class="form-group">
+                <label>Usuario:</label>
+                <input type="text" id="regUsuario" placeholder="Ingrese un usuario">
+            </div>
+            <div class="form-group">
+                <label>Contraseña:</label>
+                <input type="password" id="regPassword" placeholder="Ingrese una contraseña">
+                <small id="passwordHelp" style="display:none;">Dejar en blanco para mantener la contraseña actual</small>
+            </div>
+            <button class="btn btn-primary" onclick="guardarRegistro()">Guardar</button>
+            <button class="btn btn-secondary" onclick="volverLogin()">Cancelar</button>
+            <div id="registroError" class="error"></div>
+        </div>
+
+        <!-- Main View -->
+        <div id="mainView" class="hidden">
+            <div class="header">
+                <h2>Bienvenido, <span id="sanitarioNombre"></span></h2>
+                <div>
+                    <button class="btn btn-primary" onclick="mostrarNuevaReserva()">Nueva Reserva</button>
+                    <button class="btn btn-secondary" onclick="editarPerfil()">Editar Perfil</button>
+                    <button class="btn btn-danger" onclick="logout()">Salir</button>
+                </div>
+            </div>
+
+            <!-- TABLA 1: Reservas Pendientes (fecha_inicio = null) -->
+            <h3>Reservas Pendientes</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Categoría</th>
+                        <th>Modelo</th>
+                        <th>Nº Serie</th>
+                        <th>Ubicación</th>
+                        <th>Fecha Petición</th>
+                        <th>Horas Espera</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="pendientesBody"></tbody>
+            </table>
+
+            <!-- TABLA 2: Historial de Reservas (fecha_inicio != null) -->
+            <h3>Historial de Reservas</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Categoría</th>
+                        <th>Modelo</th>
+                        <th>Nº Serie</th>
+                        <th>Horas Estimadas</th>
+                        <th>Fecha Inicio</th>
+                        <th>Estado / Fecha Fin</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="historialBody"></tbody>
+            </table>
+
+            <!-- TABLA 3: Avisos del Sistema (Parte 3) -->
+            <h3>Avisos del Sistema</h3>
+            <table id="avisosTable">
+                <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Origen</th>
+                        <th>Texto del Aviso</th>
+                    </tr>
+                </thead>
+                <tbody id="avisosBody"></tbody>
+            </table>
+        </div>
+
+        <!-- Nueva Reserva View -->
+        <div id="nuevaReservaView" class="hidden">
+            <h2>Nueva Reserva</h2>
+            <div class="form-group">
+                <label>Categoría:</label>
+                <select id="filtroCategoria" onchange="cargarModelos()">
+                    <option value="">Seleccione categoría</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Modelo:</label>
+                <select id="filtroModelo" disabled>
+                    <option value="">Primero seleccione categoría</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Tiempo estimado (horas):</label>
+                <input type="number" id="tiempoEstimado" min="1" placeholder="Ej: 4">
+            </div>
+            <button class="btn btn-primary" onclick="buscarRecursos()">Buscar Recursos</button>
+            <button class="btn btn-secondary" onclick="volverMain()">Volver</button>
+            
+            <div id="recursosDisponibles"></div>
+        </div>
+
+        <!-- Nueva Reseña View -->
+        <div id="nuevaResenaView" class="hidden">
+            <h2>Nueva Reseña</h2>
+            <p id="resenaRecursoInfo"></p>
+            <div class="form-group">
+                <label>Valoración (1-5):</label>
+                <select id="resenaValor">
+                    <option value="1">1 - Muy malo</option>
+                    <option value="2">2 - Malo</option>
+                    <option value="3">3 - Regular</option>
+                    <option value="4">4 - Bueno</option>
+                    <option value="5" selected>5 - Excelente</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Comentario:</label>
+                <textarea id="resenaDescripcion" rows="4" placeholder="Describa su experiencia con el recurso..."></textarea>
+            </div>
+            <button class="btn btn-primary" onclick="guardarResena()">Guardar Reseña</button>
+            <button class="btn btn-secondary" onclick="volverMain()">Cancelar</button>
+            <div id="resenaError" class="error"></div>
+        </div>
+    </div>
+
+    <script src="rest.js"></script>
+    <script src="lib_rpc_cliente.js"></script>
+    <script src="ws-client.js"></script>
+    <script src="sanitario.js"></script>
+</body>
+</html>
