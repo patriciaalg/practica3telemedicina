@@ -25,30 +25,48 @@
         var xhr = new XMLHttpRequest();
         xhr.open(method, url, async);
        
-        if(data) xhr.setRequestHeader("Content-type", "application/json;charset=UTF-8"); 
+        if (data) xhr.setRequestHeader("Content-type", "application/json;charset=UTF-8"); 
+
+        // Solo inyectamos el token JWT si la ruta es de nuestra propia API local (/api/...)
+        // y no cuando se consulta un servicio externo como la API del Ministerio
         var token = localStorage.getItem("jwt_token");
-        if (token) {
+        var esRutaPropia = !url.startsWith("http://") && !url.startsWith("https://");
+        if (token && esRutaPropia) {
             xhr.setRequestHeader("Authorization", "Bearer " + token);
         }
+
         debug(">>>", method, url, data);
         xhr.send(data); 
+
         function end() {
             debug("<<<", xhr.status, xhr.response);
             var response = xhr.response;
-            if (xhr.status >= 200 && xhr.status < 300 && response) response = JSON.parse(response);
+
+            // Consideramos éxito códigos 2xx (200, 201, 204) y también 304 Not Modified
+            var statusOk = (xhr.status >= 200 && xhr.status < 300) || xhr.status === 304;
+
+            if (statusOk && response && typeof response === "string") {
+                try {
+                    response = JSON.parse(response);
+                } catch (e) {
+                    console.warn("No se pudo parsear la respuesta JSON:", response);
+                }
+            }
+
             if (async) {
                 callback(xhr.status, response);
             } else {
                 return { status: xhr.status, response: response };
             }
         }
+
         if (async) {
             xhr.onload = end;
             xhr.onerror = end;
         } else {
             return end();
         }
-    };
+    }
 
     rest.debug = false;
 
