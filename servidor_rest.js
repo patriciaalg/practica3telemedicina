@@ -1,4 +1,4 @@
-const conexion = require("./conexion_mysql");
+const conexion = require("./conexion_postgres"); // Cliente o Pool de 'pg'
 const express = require("express");
 const jwt = require("jsonwebtoken");
 const JWT_SECRET = process.env.JWT_SECRET || "secreto_super_seguro_telemedicina_2026";
@@ -31,55 +31,57 @@ function createRESTServer(data, siguientesIds, wsServer) {
 
     app.get("/api/ubicaciones", verificarJWT, function (req, res) {
         var sql = "SELECT * FROM ubicaciones";
-        conexion.query(sql, function (err, filas) {
+        conexion.query(sql, function (err, resultado) {
             if (err) {
                 console.log("Error al obtener ubicaciones:", err);
                 res.status(500).json("Error al realizar la consulta");
             } else {
-                res.status(200).json(filas);
+                res.status(200).json(resultado.rows);
             }
         });
     });
 
-    app.get("/api/categorias", verificarJWT,  function (req, res) {
+    app.get("/api/categorias", verificarJWT, function (req, res) {
         var sql = "SELECT * FROM categorias";
-        conexion.query(sql, function (err, filas) {
+        conexion.query(sql, function (err, resultado) {
             if (err) {
                 console.log("Error al obtener categorias:", err);
                 res.status(500).json("Error al realizar la consulta");
             } else {
-                res.status(200).json(filas);
+                res.status(200).json(resultado.rows);
             }
         });
     });
 
     app.get("/api/models", verificarJWT, function (req, res) {
         var sql = "SELECT * FROM modelos";
-        conexion.query(sql, function (err, filas) {
+        conexion.query(sql, function (err, resultado) {
             if (err) {
                 console.log("Error al obtener modelos:", err);
                 res.status(500).json("Error al realizar la consulta");
             } else {
-                res.status(200).json(filas);
+                res.status(200).json(resultado.rows);
             }
         });
     });
+
     app.post("/api/gestores/login", function (req, res) {
         var login = req.body.login;
         var password = req.body.password;
         
-        var sql = "SELECT * FROM gestores WHERE usuario = ? AND password = ?";
-        conexion.query(sql, [login, password], function (err, gestores) {
+        var sql = "SELECT * FROM gestores WHERE usuario = $1 AND password = $2";
+        conexion.query(sql, [login, password], function (err, resultado) {
             if (err) {
                 console.log("Error en login gestor:", err);
                 res.status(500).json("Error en el servidor");
-            } else if (gestores.length === 1) {
+            } else if (resultado.rows.length === 1) {
+                var gestor = resultado.rows[0];
                 var token = jwt.sign(
-                    { id: gestores[0].id, usuario: gestores[0].usuario },
+                    { id: gestor.id, usuario: gestor.usuario },
                     JWT_SECRET,
                     { expiresIn: "8h" }
                 );
-                res.json({ id: gestores[0].id, token: token });
+                res.json({ id: gestor.id, token: token });
             } else {
                 res.status(403).send("Credenciales incorrectas");
             }
@@ -89,19 +91,19 @@ function createRESTServer(data, siguientesIds, wsServer) {
     app.post("/api/gestores", function (req, res) {
         var datos = req.body;
 
-        var checkSql = "SELECT * FROM gestores WHERE usuario = ?";
-        conexion.query(checkSql, [datos.usuario], function (err, resultado) {
+        var checkSql = "SELECT * FROM gestores WHERE usuario = $1";
+        conexion.query(checkSql, [datos.usuario], function (err, resultadoCheck) {
             if (err) {
                 console.log("Error al comprobar usuario:", err);
                 return res.status(500).json("Error al realizar la consulta");
             }
 
-            if (resultado.length > 0) {
+            if (resultadoCheck.rows.length > 0) {
                 console.log("REGISTRO - Usuario ya existe");
                 return res.status(400).json({ error: "El usuario ya existe" });
             }
 
-            var insertSql = "INSERT INTO gestores (nombre, apellidos, usuario, password) VALUES (?, ?, ?, ?)";
+            var insertSql = "INSERT INTO gestores (nombre, apellidos, usuario, password) VALUES ($1, $2, $3, $4) RETURNING id";
             conexion.query(insertSql, [datos.nombre, datos.apellidos, datos.usuario, datos.password], function (err, insertRes) {
                 if (err) {
                     console.log("Error al registrar gestor:", err);
@@ -109,7 +111,7 @@ function createRESTServer(data, siguientesIds, wsServer) {
                 }
 
                 var nuevoGestor = {
-                    id: insertRes.insertId,
+                    id: insertRes.rows[0].id,
                     nombre: datos.nombre,
                     apellidos: datos.apellidos,
                     usuario: datos.usuario,
@@ -126,16 +128,16 @@ function createRESTServer(data, siguientesIds, wsServer) {
         var id = req.params.id;
         var datos = req.body;
 
-        var sqlBuscar = "SELECT * FROM gestores WHERE id = ?";
-        conexion.query(sqlBuscar, [id], function (err, gestores) {
+        var sqlBuscar = "SELECT * FROM gestores WHERE id = $1";
+        conexion.query(sqlBuscar, [id], function (err, resultadoBuscar) {
             if (err) {
                 return res.status(500).json("Error al consultar el gestor");
             }
-            if (gestores.length === 0) {
+            if (resultadoBuscar.rows.length === 0) {
                 return res.status(404).send("Gestor no encontrado");
             }
 
-            var gestorActual = gestores[0];
+            var gestorActual = resultadoBuscar.rows[0];
 
             var verificarYActualizar = function() {
                 var nombre = datos.nombre !== undefined ? datos.nombre : gestorActual.nombre;
@@ -143,7 +145,7 @@ function createRESTServer(data, siguientesIds, wsServer) {
                 var usuario = datos.usuario !== undefined ? datos.usuario : gestorActual.usuario;
                 var password = datos.password !== undefined ? datos.password : gestorActual.password;
 
-                var updateSql = "UPDATE gestores SET nombre = ?, apellidos = ?, usuario = ?, password = ? WHERE id = ?";
+                var updateSql = "UPDATE gestores SET nombre = $1, apellidos = $2, usuario = $3, password = $4 WHERE id = $5";
                 conexion.query(updateSql, [nombre, apellidos, usuario, password, id], function (err) {
                     if (err) {
                         return res.status(500).json("Error al actualizar el gestor");
@@ -159,9 +161,9 @@ function createRESTServer(data, siguientesIds, wsServer) {
             };
 
             if (datos.usuario && datos.usuario !== gestorActual.usuario) {
-                conexion.query("SELECT * FROM gestores WHERE usuario = ?", [datos.usuario], function (err, existe) {
+                conexion.query("SELECT * FROM gestores WHERE usuario = $1", [datos.usuario], function (err, existe) {
                     if (err) return res.status(500).json("Error al validar usuario");
-                    if (existe.length > 0) {
+                    if (existe.rows.length > 0) {
                         return res.status(400).json({ error: "El usuario ya existe" });
                     }
                     verificarYActualizar();
@@ -174,12 +176,12 @@ function createRESTServer(data, siguientesIds, wsServer) {
 
     app.get("/api/gestores/:id", verificarJWT, function (req, res) {
         var id = req.params.id;
-        var sql = "SELECT id, nombre, apellidos, usuario FROM gestores WHERE id = ?";
-        conexion.query(sql, [id], function (err, gestores) {
+        var sql = "SELECT id, nombre, apellidos, usuario FROM gestores WHERE id = $1";
+        conexion.query(sql, [id], function (err, resultado) {
             if (err) {
                 res.status(500).json("Error al consultar el gestor");
-            } else if (gestores.length === 1) {
-                res.json(gestores[0]);
+            } else if (resultado.rows.length === 1) {
+                res.json(resultado.rows[0]);
             } else {
                 res.status(404).send("Gestor no encontrado");
             }
@@ -188,12 +190,12 @@ function createRESTServer(data, siguientesIds, wsServer) {
 
     app.get("/api/sanitarios/:id", verificarJWT, function (req, res) {
         var id = req.params.id;
-        var sql = "SELECT id, nombre, apellidos, usuario FROM sanitarios WHERE id = ?";
-        conexion.query(sql, [id], function (err, sanitarios) {
+        var sql = "SELECT id, nombre, apellidos, usuario FROM sanitarios WHERE id = $1";
+        conexion.query(sql, [id], function (err, resultado) {
             if (err) {
                 res.status(500).json("Error al consultar el sanitario");
-            } else if (sanitarios.length === 1) {
-                res.json(sanitarios[0]);
+            } else if (resultado.rows.length === 1) {
+                res.json(resultado.rows[0]);
             } else {
                 res.status(404).send("Sanitario no encontrado");
             }
@@ -212,47 +214,47 @@ function createRESTServer(data, siguientesIds, wsServer) {
 
         if (categoria && categoria !== "Todos" && categoria !== "") {
             sql += " INNER JOIN modelos m ON r.modelo = m.id";
-            condiciones.push("m.categoria = ?");
             params.push(categoria);
+            condiciones.push("m.categoria = $" + params.length);
         }
 
         if (modelo && modelo !== "Todos" && modelo !== "") {
-            condiciones.push("r.modelo = ?");
             params.push(modelo);
+            condiciones.push("r.modelo = $" + params.length);
         }
 
         if (ubicacion && ubicacion !== "Todos" && ubicacion !== "") {
-            condiciones.push("r.ubicacion = ?");
             params.push(ubicacion);
+            condiciones.push("r.ubicacion = $" + params.length);
         }
 
         if (estado && estado !== "Todos" && estado !== "") {
-            condiciones.push("r.estado = ?");
             params.push(estado);
+            condiciones.push("r.estado = $" + params.length);
         }
 
         if (condiciones.length > 0) {
             sql += " WHERE " + condiciones.join(" AND ");
         }
 
-        conexion.query(sql, params, function (err, recursos) {
+        conexion.query(sql, params, function (err, resultado) {
             if (err) {
                 console.log("Error al obtener recursos:", err);
                 res.status(500).json("Error al consultar los recursos");
             } else {
-                res.json(recursos);
+                res.json(resultado.rows);
             }
         });
     });
 
     app.get("/api/recursos/:id", verificarJWT, function (req, res) {
         var id = req.params.id;
-        var sql = "SELECT * FROM recursos WHERE id = ?";
-        conexion.query(sql, [id], function (err, recursos) {
+        var sql = "SELECT * FROM recursos WHERE id = $1";
+        conexion.query(sql, [id], function (err, resultado) {
             if (err) {
                 res.status(500).json("Error al consultar el recurso");
-            } else if (recursos.length === 1) {
-                res.json(recursos[0]);
+            } else if (resultado.rows.length === 1) {
+                res.json(resultado.rows[0]);
             } else {
                 res.status(404).send("Recurso no encontrado");
             }
@@ -261,7 +263,7 @@ function createRESTServer(data, siguientesIds, wsServer) {
 
     app.post("/api/recursos", verificarJWT, function (req, res) {
         var datos = req.body;
-        var sql = "INSERT INTO recursos (modelo, ubicacion, numero_serie, estado) VALUES (?, ?, ?, ?)";
+        var sql = "INSERT INTO recursos (modelo, ubicacion, numero_serie, estado) VALUES ($1, $2, $3, $4) RETURNING id";
         var params = [parseInt(datos.modelo), parseInt(datos.ubicacion), datos.numero_serie, parseInt(datos.estado)];
 
         conexion.query(sql, params, function (err, resultado) {
@@ -271,19 +273,19 @@ function createRESTServer(data, siguientesIds, wsServer) {
             }
 
             var nuevoRecurso = {
-                id: resultado.insertId,
+                id: resultado.rows[0].id,
                 modelo: parseInt(datos.modelo),
                 ubicacion: parseInt(datos.ubicacion),
                 numero_serie: datos.numero_serie,
                 estado: parseInt(datos.estado)
             };
 
-            var sqlInfo = "SELECT m.nombre AS modeloNombre, c.nombre AS categoriaNombre FROM modelos m INNER JOIN categorias c ON m.categoria = c.id WHERE m.id = ?";
+            var sqlInfo = "SELECT m.nombre AS modelonombre, c.nombre AS categorianombre FROM modelos m INNER JOIN categorias c ON m.categoria = c.id WHERE m.id = $1";
             conexion.query(sqlInfo, [nuevoRecurso.modelo], function (errInfo, filasInfo) {
-                if (!errInfo && filasInfo.length > 0 && wsServer && wsServer.broadcastAvisoNuevoRecurso) {
+                if (!errInfo && filasInfo.rows.length > 0 && wsServer && wsServer.broadcastAvisoNuevoRecurso) {
                     wsServer.broadcastAvisoNuevoRecurso(
-                        filasInfo[0].categoriaNombre,
-                        filasInfo[0].modeloNombre,
+                        filasInfo.rows[0].categorianombre,
+                        filasInfo.rows[0].modelonombre,
                         nuevoRecurso.numero_serie,
                         datos.gestorNombre || "Gestor"
                     );
@@ -298,22 +300,22 @@ function createRESTServer(data, siguientesIds, wsServer) {
         var id = req.params.id;
         var datos = req.body;
 
-        var sqlBuscar = "SELECT * FROM recursos WHERE id = ?";
-        conexion.query(sqlBuscar, [id], function (err, recursos) {
+        var sqlBuscar = "SELECT * FROM recursos WHERE id = $1";
+        conexion.query(sqlBuscar, [id], function (err, resultadoBuscar) {
             if (err) {
                 return res.status(500).json("Error al consultar el recurso");
             }
-            if (recursos.length === 0) {
+            if (resultadoBuscar.rows.length === 0) {
                 return res.status(404).send("Recurso no encontrado");
             }
 
-            var actual = recursos[0];
+            var actual = resultadoBuscar.rows[0];
             var modelo = datos.modelo !== undefined ? parseInt(datos.modelo) : actual.modelo;
             var ubicacion = datos.ubicacion !== undefined ? parseInt(datos.ubicacion) : actual.ubicacion;
             var numero_serie = datos.numero_serie !== undefined ? datos.numero_serie : actual.numero_serie;
             var estado = datos.estado !== undefined ? parseInt(datos.estado) : actual.estado;
 
-            var sqlUpdate = "UPDATE recursos SET modelo = ?, ubicacion = ?, numero_serie = ?, estado = ? WHERE id = ?";
+            var sqlUpdate = "UPDATE recursos SET modelo = $1, ubicacion = $2, numero_serie = $3, estado = $4 WHERE id = $5";
             conexion.query(sqlUpdate, [modelo, ubicacion, numero_serie, estado, id], function (errUpdate) {
                 if (errUpdate) {
                     return res.status(500).json("Error al actualizar el recurso");
@@ -331,12 +333,12 @@ function createRESTServer(data, siguientesIds, wsServer) {
 
     app.delete("/api/recursos/:id", verificarJWT, function (req, res) {
         var id = req.params.id;
-        var sql = "DELETE FROM recursos WHERE id = ?";
+        var sql = "DELETE FROM recursos WHERE id = $1";
         conexion.query(sql, [id], function (err, resultado) {
             if (err) {
                 console.log("Error al borrar el recurso:", err);
                 res.status(500).json("Error al realizar el borrado");
-            } else if (resultado.affectedRows > 0) {
+            } else if (resultado.rowCount > 0) {
                 res.status(200).json("Recurso eliminado");
             } else {
                 res.status(404).json("No se ha encontrado el recurso a borrar");
@@ -346,24 +348,24 @@ function createRESTServer(data, siguientesIds, wsServer) {
 
     app.get("/api/recursos/:id/reservas", verificarJWT, function (req, res) {
         var id = req.params.id;
-        var sql = "SELECT * FROM reservas WHERE recurso = ?";
-        conexion.query(sql, [id], function (err, reservas) {
+        var sql = "SELECT * FROM reservas WHERE recurso = $1";
+        conexion.query(sql, [id], function (err, resultado) {
             if (err) {
                 res.status(500).json("Error al consultar reservas");
             } else {
-                res.json(reservas);
+                res.json(resultado.rows);
             }
         });
     });
 
     app.get("/api/recursos/:id/resenvas", verificarJWT, function (req, res) {
         var id = req.params.id;
-        var sql = "SELECT * FROM resenvas WHERE recurso = ?";
-        conexion.query(sql, [id], function (err, resenvas) {
+        var sql = "SELECT * FROM resenvas WHERE recurso = $1";
+        conexion.query(sql, [id], function (err, resultado) {
             if (err) {
                 res.status(500).json("Error al consultar resenvas");
             } else {
-                res.json(resenvas);
+                res.json(resultado.rows);
             }
         });
     });
@@ -374,11 +376,11 @@ function createRESTServer(data, siguientesIds, wsServer) {
             if (err) {
                 res.status(500).json("Error al contar reservas");
             } else {
-                res.status(200).json({ count: resultado[0].total });
+                res.status(200).json({ count: parseInt(resultado.rows[0].total) });
             }
         });
     });
-   
+    
     return app;
 }
 
