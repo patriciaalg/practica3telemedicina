@@ -5,7 +5,6 @@ var ubicaciones = [];
 var wsClient = null;
 
 document.addEventListener("DOMContentLoaded", function() {
-    cargarDatosAuxiliares();
     wsClient = Object.create(WSClient);
 });
 
@@ -44,7 +43,12 @@ function handleLogin() {
             
             mostrarVista("main");
             cargarBienvenida();
-            buscarRecursos();
+            
+            // Cargar auxiliares y después listar los recursos
+            cargarDatosAuxiliares(function() {
+                buscarRecursos();
+            });
+
             cargarRankingMinisterio(); 
             document.getElementById("login-error").innerHTML = "";
         } else {
@@ -165,26 +169,25 @@ function cargarBienvenida() {
     });
 }
 
-function cargarDatosAuxiliares() {
-    rest.get("/api/categorias", function(status, response) {
+function cargarDatosAuxiliares(callback) {
+    rest.get("/api/categorias", function(status, respCat) {
         if (status == 200) {
-            categorias = response;
+            categorias = respCat;
             cargarSelectCategorias();
         }
-    });
-    
-    rest.get("/api/models", function(status, response) {
-        if (status == 200) {
-            modelos = response;
-            cargarSelectModelos();
-        }
-    });
-    
-    rest.get("/api/ubicaciones", function(status, response) {
-        if (status == 200) {
-            ubicaciones = response;
-            cargarSelectUbicaciones();
-        }
+        rest.get("/api/models", function(status, respMod) {
+            if (status == 200) {
+                modelos = respMod;
+                cargarSelectModelos();
+            }
+            rest.get("/api/ubicaciones", function(status, respUbic) {
+                if (status == 200) {
+                    ubicaciones = respUbic;
+                    cargarSelectUbicaciones();
+                }
+                if (callback) callback();
+            });
+        });
     });
 }
 
@@ -540,7 +543,7 @@ function cargarRankingMinisterio() {
 
 function enviarReservasAlMinisterio() {
     var hoy = new Date().toISOString().split("T")[0]; 
-    
+
     var payloadEjemplo = {
         id_area: 15,
         fecha: hoy,
