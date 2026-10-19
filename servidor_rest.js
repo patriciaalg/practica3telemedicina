@@ -1,4 +1,3 @@
-const conexion = require("./conexion_mysql");
 const express = require("express");
 const jwt = require("jsonwebtoken");
 const JWT_SECRET = process.env.JWT_SECRET || "secreto_super_seguro_telemedicina_2026";
