@@ -26,12 +26,14 @@ const restApp = createRESTServer(datosServidor, siguientesIds, wsServer);
 app.use(restApp);
 
 // Crear servidor RPC (pasar wsServer para notificaciones de reservas)
-
 const rpcServer = createRPCServer(wsServer);
 
-server.listen(3000, function() {
-    console.log("Servidor HTTP corriendo en http://localhost:3000");
-    console.log("App gestor en http://localhost:3000/gestor/gestor.html");
-    console.log("App sanitario en http://localhost:3000/sanitario/sanitario.html");
-    console.log("Servicios REST en http://localhost:3000/api/...");
+// Configuración de puerto dinámico para Render
+const PORT = process.env.PORT || 3000;
+
+server.listen(PORT, function() {
+    console.log(`Servidor HTTP corriendo en el puerto ${PORT}`);
+    console.log(`App gestor en /gestor/gestor.html`);
+    console.log(`App sanitario en /sanitario/sanitario.html`);
+    console.log(`Servicios REST en /api/...`);
 });
