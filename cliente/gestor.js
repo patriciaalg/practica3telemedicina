@@ -503,13 +503,11 @@ function cargarRankingMinisterio() {
             return;
         }
 
-     
         var reservasPorArea = {};
         for (var i = 1; i <= 18; i++) {
             reservasPorArea[i] = 0;
         }
 
-      
         data.forEach(function(item) {
             var areaId = parseInt(item.id_area);
             if (reservasPorArea[areaId] !== undefined) {
@@ -527,12 +525,10 @@ function cargarRankingMinisterio() {
             });
         }
 
-  
         ranking.sort(function(a, b) {
             return b.total - a.total;
         });
 
-      
         tbody.innerHTML = "";
         ranking.forEach(function(area, index) {
             tbody.innerHTML += 
@@ -545,31 +541,95 @@ function cargarRankingMinisterio() {
     });
 }
 
-function enviarReservasAlMinisterio() {
+function peticionAsync(url) {
+    return new Promise(function(resolve) {
+        rest.get(url, function(status, data) {
+            if (status >= 200 && status < 300) {
+                resolve(data);
+            } else {
+                resolve(null);
+            }
+        });
+    });
+}
+
+async function enviarReservasAlMinisterio() {
     var hoy = new Date().toISOString().split("T")[0]; 
+
+    if (!categorias || categorias.length === 0 || !modelos || modelos.length === 0) {
+        await new Promise(function(resolve) {
+            cargarDatosAuxiliares(resolve);
+        });
+    }
+
+    var recursos = await peticionAsync("/api/recursos");
+    if (!recursos || !Array.isArray(recursos) || recursos.length === 0) {
+        alert("No se han encontrado recursos en el hospital.");
+        return;
+    }
+
+    var sanitariosCache = {}; 
+    var listaDatos = [];
+
+    for (var i = 0; i < recursos.length; i++) {
+        var rec = recursos[i];
+     
+        var mod = getModeloById(rec.modelo);
+        var cat = getCategoriaById(mod ? mod.categoria : null);
+        var nombreCategoria = cat ? cat.nombre : "Equipamiento Médico";
+
+        var reservasRecurso = await peticionAsync("/api/recursos/" + rec.id + "/reservas");
+
+        if (reservasRecurso && Array.isArray(reservasRecurso)) {
+            for (var j = 0; j < reservasRecurso.length; j++) {
+                var res = reservasRecurso[j];
+                var idSanitario = res.sanitario;
+
+                if (!sanitariosCache[idSanitario]) {
+                    var datosSanitario = await peticionAsync("/api/sanitarios/" + idSanitario);
+                    sanitariosCache[idSanitario] = datosSanitario || { nombre: "Sanitario", apellidos: "Desconocido" };
+                }
+
+                var s = sanitariosCache[idSanitario];
+
+                var fecPet = res.fecha_peticion ? res.fecha_peticion.split("T")[0] : hoy;
+                var fecIni = res.fecha_inicio ? res.fecha_inicio.replace("T", " ").substring(0, 19) : (hoy + " 08:00:00");
+                var fecFin = res.fecha_fin ? res.fecha_fin.replace("T", " ").substring(0, 19) : (hoy + " 10:00:00");
+                var horas = res.horas_estimadas !== undefined && res.horas_estimadas !== null ? String(res.horas_estimadas) : "1";
+
+                listaDatos.push({
+                    nombre: s.nombre,
+                    apellidos: s.apellidos,
+                    categoría: nombreCategoria,
+                    horas_estimadas: horas,
+                    fec_pet: fecPet,
+                    fec_ini: fecIni,
+                    fecha_fin: fecFin
+                });
+            }
+        }
+    }
+
+    if (listaDatos.length === 0) {
+        alert("No hay reservas registradas en ningún recurso para enviar.");
+        return;
+    }
+
     var payload = {
         id_area: 13,
         fecha: hoy,
-        datos: [
-            {
-                nombre: "Sanitario",
-                apellidos: "Especialista",
-                categoría: "Equipo Médico",
-                horas_estimadas: "2",
-                fec_pet: hoy,
-                fec_ini: hoy + " 09:00:00",
-                fecha_fin: hoy + " 11:00:00"
-            }
-        ]
+        datos: listaDatos
     };
+
+    console.log("Enviando " + listaDatos.length + " reservas al Ministerio:", payload);
 
     rest.post("https://undefined.ua.es/telemedicina/api/datos", payload, function(status, response) {
         if (status === 200 || status === 201) {
-            alert("Reserva enviada con éxito al Ministerio para el área 13 (" + AREAS_MEDICAS[13] + ").");
-            cargarRankingMinisterio(); 
+            alert("Se han enviado con éxito " + listaDatos.length + " reservas al Ministerio para el área 13 (" + (AREAS_MEDICAS[13] || "Área 13") + ").");
+            cargarRankingMinisterio(); // Actualiza la tabla del ranking sumando todas las enviadas
         } else {
             console.error("Error devuelto por el Ministerio:", status, response);
-            alert("Error al enviar la reserva al Ministerio (Status: " + status + ")");
+            alert("Error al enviar reservas al Ministerio (Status: " + status + ")");
         }
     });
 }
