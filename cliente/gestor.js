@@ -499,43 +499,47 @@ function cargarRankingMinisterio() {
 
     rest.get("https://undefined.ua.es/telemedicina/api/datos", function(status, data) {
         if (status !== 200 || !Array.isArray(data)) {
-            tbody.innerHTML = "<tr><td colspan='3'>Error al consultar el Ministerio</td></tr>";
+            tbody.innerHTML = "<tr><td colspan='3' style='text-align:center;'>Error al consultar los datos del Ministerio</td></tr>";
             return;
         }
 
+     
         var reservasPorArea = {};
         for (var i = 1; i <= 18; i++) {
             reservasPorArea[i] = 0;
         }
 
+      
         data.forEach(function(item) {
             var areaId = parseInt(item.id_area);
             if (reservasPorArea[areaId] !== undefined) {
-                var cant = Array.isArray(item.datos) ? item.datos.length : 1;
-                reservasPorArea[areaId] += cant;
+                var totalRegistros = Array.isArray(item.datos) ? item.datos.length : 1;
+                reservasPorArea[areaId] += totalRegistros;
             }
         });
 
-        var listaRanking = [];
-        for (var id in reservasPorArea) {
-            listaRanking.push({
-                id: parseInt(id),
+        var ranking = [];
+        for (var id = 1; id <= 18; id++) {
+            ranking.push({
+                id: id,
                 nombre: AREAS_MEDICAS[id] || ("Área " + id),
                 total: reservasPorArea[id]
             });
         }
 
-        listaRanking.sort(function(a, b) {
-            return b.total - a.total; 
+  
+        ranking.sort(function(a, b) {
+            return b.total - a.total;
         });
 
+      
         tbody.innerHTML = "";
-        listaRanking.forEach(function(area, index) {
+        ranking.forEach(function(area, index) {
             tbody.innerHTML += 
                 "<tr>" +
-                "<td>" + (index + 1) + "</td>" +
+                "<td style='text-align: center; font-weight: bold;'>" + (index + 1) + "</td>" +
                 "<td>" + area.nombre + "</td>" +
-                "<td>" + area.total.toLocaleString() + "</td>" +
+                "<td style='text-align: right;'>" + area.total.toLocaleString() + "</td>" +
                 "</tr>";
         });
     });
@@ -543,29 +547,29 @@ function cargarRankingMinisterio() {
 
 function enviarReservasAlMinisterio() {
     var hoy = new Date().toISOString().split("T")[0]; 
-
-    var payloadEjemplo = {
-        id_area: 15,
+    var payload = {
+        id_area: 13,
         fecha: hoy,
         datos: [
             {
-                nombre: "Juan",
-                apellidos: "García Pérez",
-                categoría: "Monitor Cardíaco",
-                horas_estimadas: "4",
-                fec_pet: "2026-10-18",
-                fec_ini: "2026-10-19 09:00:00",
-                fecha_fin: "2026-10-19 13:00:00"
+                nombre: "Sanitario",
+                apellidos: "Especialista",
+                categoría: "Equipo Médico",
+                horas_estimadas: "2",
+                fec_pet: hoy,
+                fec_ini: hoy + " 09:00:00",
+                fecha_fin: hoy + " 11:00:00"
             }
         ]
     };
 
-    rest.post("https://undefined.ua.es/telemedicina/api/datos", payloadEjemplo, function(status, response) {
+    rest.post("https://undefined.ua.es/telemedicina/api/datos", payload, function(status, response) {
         if (status === 200 || status === 201) {
-            alert("Reservas enviadas correctamente al Ministerio");
-            cargarRankingMinisterio();
+            alert("Reserva enviada con éxito al Ministerio para el área 13 (" + AREAS_MEDICAS[13] + ").");
+            cargarRankingMinisterio(); 
         } else {
-            alert("Error al enviar reservas al Ministerio");
+            console.error("Error devuelto por el Ministerio:", status, response);
+            alert("Error al enviar la reserva al Ministerio (Status: " + status + ")");
         }
     });
 }
