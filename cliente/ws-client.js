@@ -14,7 +14,19 @@ var WSClient = {
         this.userName = userName;
         
         return new Promise(function(resolve, reject) {
-            self.conexion = new WebSocket("ws://localhost:3000");
+            // Resolver protocolo según la página (Render usa https -> wss)
+            var protocolo = window.location.protocol === "https:" ? "wss://" : "ws://";
+            // Tomar el host dinámicamente (tu-app.onrender.com o localhost:3000)
+            var host = window.location.host;
+            var urlWS = protocolo + host + "/";
+
+            console.log("Conectando WebSocket a:", urlWS);
+
+            try {
+                self.conexion = new WebSocket(urlWS);
+            } catch (err) {
+                return reject(err);
+            }
             
             self.conexion.onopen = function() {
                 console.log("WebSocket conectado");
@@ -37,12 +49,16 @@ var WSClient = {
             };
             
             self.conexion.onmessage = function(msg) {
-                var data = JSON.parse(msg.data);
-                if (data.tipo === "aviso") {
-                    self.avisos.unshift(data);
-                    if (self.onAvisoCallback) {
-                        self.onAvisoCallback(data);
+                try {
+                    var data = JSON.parse(msg.data);
+                    if (data.tipo === "aviso") {
+                        self.avisos.unshift(data);
+                        if (self.onAvisoCallback) {
+                            self.onAvisoCallback(data);
+                        }
                     }
+                } catch (e) {
+                    console.warn("Mensaje recibido no parseable:", msg.data);
                 }
             };
         });
@@ -84,18 +100,18 @@ var WSClient = {
         }
     },
     
-   enviarAvisoResena: function(categoria, modelo, codigo, puntuacion) {
-    console.log("📤 ws-client enviando aviso reseña:", {categoria, modelo, codigo, puntuacion});
-    if (this.conexion && this.conexion.readyState === WebSocket.OPEN) {
-        this.conexion.send(JSON.stringify({
-            tipo: "aviso_resena",
-            categoria: categoria,
-            modelo: modelo,
-            codigo: codigo,
-            puntuacion: puntuacion
-        }));
-    } else {
-        console.error("WebSocket no está conectado");
+    enviarAvisoResena: function(categoria, modelo, codigo, puntuacion) {
+        console.log("📤 ws-client enviando aviso reseña:", {categoria, modelo, codigo, puntuacion});
+        if (this.conexion && this.conexion.readyState === WebSocket.OPEN) {
+            this.conexion.send(JSON.stringify({
+                tipo: "aviso_resena",
+                categoria: categoria,
+                modelo: modelo,
+                codigo: codigo,
+                puntuacion: puntuacion
+            }));
+        } else {
+            console.error("WebSocket no está conectado");
+        }
     }
-   }
 };
