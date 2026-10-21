@@ -34,10 +34,14 @@ function handleLogin() {
             
             rest.get("/api/gestores/" + gestorActual, async function(status, gestorData) {
                 if (status == 200) {
-                    await wsClient.conectar(gestorActual, 'gestor', gestorData.nombre + " " + gestorData.apellidos);
-                    wsClient.onAviso(function(aviso) {
-                        agregarAvisoATabla(aviso);
-                    });
+                    try {
+                        await wsClient.conectar(gestorActual, 'gestor', gestorData.nombre + " " + gestorData.apellidos);
+                        wsClient.onAviso(function(aviso) {
+                            agregarAvisoATabla(aviso);
+                        });
+                    } catch (err) {
+                        console.error("Error al conectar el WebSocket:", err);
+                    }
                 }
             });
             
@@ -84,7 +88,6 @@ function mostrarRegistro() {
     document.getElementById("registro-titulo").innerHTML = "Registro de Gestor";
     var gestorId = document.getElementById("gestor-id");
     if (gestorId) gestorId.value = "";
-    document.getElementById("gestor-id").value = "";
     document.getElementById("reg-nombre").value = "";
     document.getElementById("reg-apellidos").value = "";
     document.getElementById("reg-usuario").value = "";
@@ -554,7 +557,7 @@ function peticionAsync(url) {
 }
 
 async function enviarReservasAlMinisterio() {
-    var hoy = new Date().toISOString().split("T")[0]; 
+    var hoy = new Date().toISOString().split("T")[0];
 
     if (!categorias || categorias.length === 0 || !modelos || modelos.length === 0) {
         await new Promise(function(resolve) {
@@ -568,12 +571,12 @@ async function enviarReservasAlMinisterio() {
         return;
     }
 
-    var sanitariosCache = {}; 
+    var sanitariosCache = {};
     var listaDatos = [];
 
     for (var i = 0; i < recursos.length; i++) {
         var rec = recursos[i];
-     
+        
         var mod = getModeloById(rec.modelo);
         var cat = getCategoriaById(mod ? mod.categoria : null);
         var nombreCategoria = cat ? cat.nombre : "Equipamiento Médico";
@@ -626,7 +629,7 @@ async function enviarReservasAlMinisterio() {
     rest.post("https://undefined.ua.es/telemedicina/api/datos", payload, function(status, response) {
         if (status === 200 || status === 201) {
             alert("Se han enviado con éxito " + listaDatos.length + " reservas al Ministerio para el área 13 (" + (AREAS_MEDICAS[13] || "Área 13") + ").");
-            cargarRankingMinisterio(); // Actualiza la tabla del ranking sumando todas las enviadas
+            cargarRankingMinisterio();
         } else {
             console.error("Error devuelto por el Ministerio:", status, response);
             alert("Error al enviar reservas al Ministerio (Status: " + status + ")");
