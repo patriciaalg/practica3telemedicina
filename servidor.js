@@ -18,6 +18,11 @@ var siguientesIds = {
 app.use("/gestor", express.static("cliente"));
 app.use("/sanitario", express.static("cliente_sanitario"));
 
+// Redirección en la raíz para evitar "Cannot GET /"
+app.get("/", function(req, res) {
+    res.redirect("/gestor/gestor.html");
+});
+
 // Crear servidor WebSocket
 const wsServer = createWebSocketServer(server);
 
@@ -26,7 +31,6 @@ const restApp = createRESTServer(datosServidor, siguientesIds, wsServer);
 app.use(restApp);
 
 // Crear servidor RPC (pasar wsServer para notificaciones de reservas)
-
 const rpcServer = createRPCServer(wsServer);
 
 server.listen(3000, function() {
