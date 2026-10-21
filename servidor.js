@@ -18,11 +18,6 @@ var siguientesIds = {
 app.use("/gestor", express.static("cliente"));
 app.use("/sanitario", express.static("cliente_sanitario"));
 
-// --- AÑADE ESTO AQUÍ: Redirige la URL principal a la app del gestor ---
-app.get("/", function(req, res) {
-    res.redirect("/gestor/gestor.html");
-});
-
 // Crear servidor WebSocket
 const wsServer = createWebSocketServer(server);
 
@@ -33,12 +28,12 @@ app.use(restApp);
 // Crear servidor RPC (pasar wsServer para notificaciones de reservas)
 const rpcServer = createRPCServer(wsServer);
 
-// Configuración de puerto para Render (usa process.env.PORT si existe, o 3000 en local)
+// En Render el puerto se define por la variable de entorno PORT
 const PORT = process.env.PORT || 3000;
 
 server.listen(PORT, function() {
-    console.log(`Servidor HTTP corriendo en el puerto ${PORT}`);
-    console.log(`App gestor en /gestor/gestor.html`);
-    console.log(`App sanitario en /sanitario/sanitario.html`);
-    console.log(`Servicios REST en /api/...`);
+    console.log("Servidor HTTP corriendo en el puerto " + PORT);
+    console.log("App gestor disponible en /gestor/gestor.html");
+    console.log("App sanitario disponible en /sanitario/sanitario.html");
+    console.log("Servicios REST disponibles en /api/...");
 });
